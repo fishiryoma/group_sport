@@ -1,8 +1,7 @@
-import * as crypto from "crypto";
 import { UserData } from "./types";
 import { Message, Client } from "@line/bot-sdk";
 import { db } from "./config";
-// import { createReminderMessage } from "./messages";
+import { createReminderMessage } from "./messages";
 
 const getTodayDate = (): string => {
   const date = new Date();
@@ -21,26 +20,6 @@ const getYesterdayDate = (): string => {
   const day = String(yesterday.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
-
-/**
- * 驗證 LINE Webhook 簽名
- */
-export function validateSignature(
-  body: string,
-  signature: string,
-  secret: string
-): boolean {
-  try {
-    const hash = crypto
-      .createHmac("sha256", secret)
-      .update(body, "utf8")
-      .digest("base64");
-    return hash === signature;
-  } catch (error) {
-    console.error("簽名計算錯誤:", error);
-    return false;
-  }
-}
 
 /**
  * 獲取用戶 LINE 資料
@@ -97,6 +76,44 @@ export async function updateUserActivity(
   } catch (error) {
     console.error(`❌ 更新用戶活動狀態失敗:`, error);
     return false;
+  }
+}
+
+/**
+ * 設置用戶語言偏好
+ */
+export async function setUserLanguage(
+  userId: string,
+  language: string
+): Promise<boolean> {
+  try {
+    const userRef = db.ref(`users/${userId}`);
+    await userRef.update({
+      language: language,
+      lastActiveAt: new Date().toISOString(),
+    });
+    console.log(`✅ 用戶 ${userId} 語言設置已更新為: ${language}`);
+    return true;
+  } catch (error) {
+    console.error(`❌ 設置用戶語言失敗:`, error);
+    return false;
+  }
+}
+
+/**
+ * 獲取用戶語言偏好
+ */
+export async function getUserLanguage(userId: string): Promise<string> {
+  try {
+    const userSnapshot = await db.ref(`users/${userId}`).get();
+    if (userSnapshot.exists()) {
+      const userData = userSnapshot.val();
+      return userData.language || "zh-TW"; // 默認中文
+    }
+    return "zh-TW"; // 默認中文
+  } catch (error) {
+    console.error(`❌ 獲取用戶語言失敗:`, error);
+    return "zh-TW"; // 默認中文
   }
 }
 
@@ -208,7 +225,7 @@ export async function writeRecord(
         return {
           success: true,
           ranking: existingData.ranking,
-          isFirstTimeToday: false, 
+          isFirstTimeToday: false,
         };
       }
     }
@@ -225,7 +242,7 @@ export async function writeRecord(
     await userRecordRef.set(recordData);
     console.log(`✅ 用戶 ${userId} 今日運動記錄已寫入，排名: ${ranking}`);
 
-    return { success: true, ranking, isFirstTimeToday: true }; 
+    return { success: true, ranking, isFirstTimeToday: true };
   } catch (error) {
     console.error("❌ 寫入今日運動記錄失敗:", error);
     return { success: false, ranking: 0, isFirstTimeToday: false };
@@ -323,14 +340,25 @@ export async function getTodayAllUsersRecord(): Promise<
 /**
  * 格式化時間為上午/下午幾點（台灣時區）
  */
-export const getFormattedTime = (isoString: string): string => {
+export const getFormattedTime = (
+  isoString: string,
+  language: string = "zh-TW"
+): string => {
   try {
     const date = new Date(isoString);
-    const taiwanTime = date.toLocaleString("zh-TW", {
+    const taiwanTime = date.toLocaleString(language, {
       timeZone: "Asia/Taipei",
       hour: "numeric",
       hour12: true,
     });
+    const japanTime = date.toLocaleString(language, {
+      timeZone: "Asia/Tokyo",
+      hour: "numeric",
+      hour12: true,
+    });
+    if (language === "ja-JP") {
+      return japanTime;
+    }
     return taiwanTime.replace("時", "點");
   } catch (error) {
     console.error("❌ 時間格式化失敗:", error);
@@ -402,27 +430,33 @@ export async function sendRemindersToUnfinishedUsers(
       return { success: true, sentCount: 0 };
     }
 
-    // let sentCount = 0;
-    const sentCount = 0;
-    // const lineClient = new Client({
-    //   channelAccessToken: accessToken,
-    //   channelSecret: secret,
-    // });
+    let sentCount = 0;
+    const lineClient = new Client({
+      channelAccessToken: accessToken,
+      channelSecret: secret,
+    });
 
     // 批量發送提醒
-    // for (const user of unfinishedUsers) {
-    //   try {
-    //     const reminderMessage = createReminderMessage(finishedUserDisplayName);
-    //     await lineClient.pushMessage(user.userId, reminderMessage);
-    //     sentCount++;
-    //     console.log(`✅ 提醒訊息已發送給 ${user.displayName} (${user.userId})`);
-    //   } catch (error) {
-    //     console.error(
-    //       `❌ 發送提醒訊息失敗給 ${user.displayName} (${user.userId}):`,
-    //       error
-    //     );
-    //   }
-    // }
+    for (const user of unfinishedUsers) {
+      try {
+        // 獲取每個用戶的語言偏好
+        const userLanguage = await getUserLanguage(user.userId);
+        const reminderMessage = createReminderMessage(
+          finishedUserDisplayName,
+          userLanguage
+        );
+        await lineClient.pushMessage(user.userId, reminderMessage);
+        sentCount++;
+        console.log(
+          `✅ 提醒訊息已發送給 ${user.displayName} (${user.userId}) 語言: ${userLanguage}`
+        );
+      } catch (error) {
+        console.error(
+          `❌ 發送提醒訊息失敗給 ${user.displayName} (${user.userId}):`,
+          error
+        );
+      }
+    }
 
     console.log(
       `✅ 提醒訊息發送完成，成功發送 ${sentCount}/${unfinishedUsers.length} 則訊息`

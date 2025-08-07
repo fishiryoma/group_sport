@@ -1,7 +1,6 @@
 import { onRequest } from "firebase-functions/v2/https";
-import { WebhookEvent } from "@line/bot-sdk";
+import { WebhookEvent, validateSignature } from "@line/bot-sdk";
 import { channelAccessToken, channelSecret } from "./config";
-import { validateSignature } from "./utils";
 import {
   handleFollowEvent,
   handleTextMessage,
@@ -57,7 +56,7 @@ export const lineWebhook = onRequest(
       console.log("Req.bod是什麼呢??", req.body);
 
       // 簽名驗證
-      if (!validateSignature(requestBody, signature, secretValue)) {
+      if (!validateSignature(requestBody, secretValue, signature)) {
         console.warn("❌ 簽名驗證失敗");
         res.status(401).send("❌ Invalid signature");
         return;

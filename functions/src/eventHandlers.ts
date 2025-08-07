@@ -8,11 +8,14 @@ import {
   writeRecord,
   sendRemindersToUnfinishedUsers,
   getTodayAllUsersRecord,
+  setUserLanguage,
+  getUserLanguage,
 } from "./utils";
 import {
   createGeneralMessage,
   createRecordReply,
   createRankingReply,
+  createLanguageChangeMessage,
 } from "./messages";
 
 /**
@@ -101,8 +104,14 @@ export async function handleTextMessage(
     await updateUserActivity(userId, true);
 
     // 檢查訊息類型
-    const isCompleteCommand = userMessage === "完成";
-    const isRankingQuery = userMessage === "排名";
+    const isCompleteCommand = userMessage === "完成" || userMessage === "完了";
+    const isRankingQuery =
+      userMessage === "排名" || userMessage === "ランキング";
+    const isLanguageSwitch =
+      userMessage === "日本語" ||
+      userMessage === "JP" ||
+      userMessage === "中文" ||
+      userMessage === "TW";
 
     if (isCompleteCommand) {
       // 處理運動完成邏輯
@@ -110,6 +119,15 @@ export async function handleTextMessage(
     } else if (isRankingQuery) {
       // 處理排名查詢邏輯
       return await handleRankingQuery(event, userId, accessToken, secret);
+    } else if (isLanguageSwitch) {
+      // 處理語言切換邏輯
+      return await handleLanguageSwitch(
+        event,
+        userId,
+        userMessage,
+        accessToken,
+        secret
+      );
     } else {
       // 處理一般訊息
       return await handleGeneralMessage(event, userId, accessToken, secret);
@@ -146,6 +164,9 @@ async function handleExerciseComplete(
       throw new Error("寫入運動記錄失敗");
     }
 
+    // 獲取用戶語言偏好
+    const userLanguage = await getUserLanguage(userId);
+
     // 獲取昨日排名
     const { ranking: yesterdayRanking } = await getYesterdayRanking(userId);
     const hasYesterdayRecord = yesterdayRanking > 0;
@@ -154,7 +175,8 @@ async function handleExerciseComplete(
     const replyMsg = createRecordReply(
       hasYesterdayRecord,
       yesterdayRanking,
-      recordResult.ranking
+      recordResult.ranking,
+      userLanguage
     );
 
     // 回覆用戶
@@ -226,20 +248,84 @@ async function handleRankingQuery(
   secret: string
 ) {
   try {
+    // 獲取用戶語言偏好
+    const userLanguage = await getUserLanguage(userId);
+
     // 獲取今日所有用戶運動記錄
     const usersRecord = await getTodayAllUsersRecord();
 
     // 生成排名回覆訊息
-    const replyMsg = createRankingReply(usersRecord);
+    const replyMsg = createRankingReply(usersRecord, userLanguage);
 
     if (event.replyToken) {
       await replyMessage(event.replyToken, replyMsg, accessToken, secret);
-      console.log(`✅ 成功回覆用戶 ${userId} 排名查詢`);
+      console.log(`✅ 成功回覆用戶 ${userId} 排名查詢 (語言: ${userLanguage})`);
     }
 
     return { success: true, userId, message: "ranking_query" };
   } catch (error: any) {
     console.error(`❌ 處理排名查詢失敗:`, error);
+
+    // 發送錯誤回覆
+    if (event.replyToken) {
+      const userLanguage = await getUserLanguage(userId);
+      const errorMsg = createGeneralMessage(undefined, userLanguage);
+      await replyMessage(event.replyToken, errorMsg, accessToken, secret);
+    }
+
+    return {
+      success: false,
+      userId,
+      message: "ranking_query_failed",
+      error: error.message,
+    };
+  }
+}
+
+/**
+ * 處理語言切換邏輯
+ */
+async function handleLanguageSwitch(
+  event: any,
+  userId: string,
+  userMessage: string,
+  accessToken: string,
+  secret: string
+) {
+  try {
+    // 判斷要切換到哪種語言
+    let targetLanguage: string;
+    if (userMessage === "日本語" || userMessage === "JP") {
+      targetLanguage = "ja-JP";
+    } else if (userMessage === "中文" || userMessage === "TW") {
+      targetLanguage = "zh-TW";
+    } else {
+      targetLanguage = "zh-TW"; // 默認中文
+    }
+
+    // 設置用戶語言
+    const success = await setUserLanguage(userId, targetLanguage);
+
+    if (!success) {
+      throw new Error("設置語言失敗");
+    }
+
+    // 生成語言切換成功訊息
+    const replyMsg = createLanguageChangeMessage(targetLanguage);
+
+    if (event.replyToken) {
+      await replyMessage(event.replyToken, replyMsg, accessToken, secret);
+      console.log(`✅ 成功回覆用戶 ${userId} 語言切換訊息`);
+    }
+
+    return {
+      success: true,
+      userId,
+      message: "language_switched",
+      language: targetLanguage,
+    };
+  } catch (error: any) {
+    console.error(`❌ 處理語言切換失敗:`, error);
 
     // 發送錯誤回覆
     if (event.replyToken) {
@@ -250,7 +336,7 @@ async function handleRankingQuery(
     return {
       success: false,
       userId,
-      message: "ranking_query_failed",
+      message: "language_switch_failed",
       error: error.message,
     };
   }
@@ -266,12 +352,15 @@ async function handleGeneralMessage(
   secret: string
 ) {
   try {
+    // 獲取用戶語言偏好
+    const userLanguage = await getUserLanguage(userId);
+
     // 回覆一般訊息
-    const replyMsg = createGeneralMessage();
+    const replyMsg = createGeneralMessage(undefined, userLanguage);
 
     if (event.replyToken) {
       await replyMessage(event.replyToken, replyMsg, accessToken, secret);
-      console.log(`✅ 成功回覆用戶 ${userId} 一般訊息`);
+      console.log(`✅ 成功回覆用戶 ${userId} 一般訊息 (語言: ${userLanguage})`);
     }
 
     return { success: true, userId, message: "general_reply" };
