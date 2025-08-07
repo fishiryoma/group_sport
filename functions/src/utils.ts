@@ -2,7 +2,7 @@ import * as crypto from "crypto";
 import { UserData } from "./types";
 import { Message, Client } from "@line/bot-sdk";
 import { db } from "./config";
-import { createReminderMessage } from "./messages";
+// import { createReminderMessage } from "./messages";
 
 const getTodayDate = (): string => {
   const date = new Date();
@@ -192,7 +192,7 @@ const calculateCurrentRanking = async (): Promise<number> => {
  */
 export async function writeRecord(
   userId: string
-): Promise<{ success: boolean; ranking: number }> {
+): Promise<{ success: boolean; ranking: number; isFirstTimeToday: boolean }> {
   try {
     const todayDate = getTodayDate();
     const userRecordRef = db.ref(`users/${userId}/data/${todayDate}`);
@@ -208,6 +208,7 @@ export async function writeRecord(
         return {
           success: true,
           ranking: existingData.ranking,
+          isFirstTimeToday: false, 
         };
       }
     }
@@ -224,10 +225,10 @@ export async function writeRecord(
     await userRecordRef.set(recordData);
     console.log(`✅ 用戶 ${userId} 今日運動記錄已寫入，排名: ${ranking}`);
 
-    return { success: true, ranking };
+    return { success: true, ranking, isFirstTimeToday: true }; 
   } catch (error) {
     console.error("❌ 寫入今日運動記錄失敗:", error);
-    return { success: false, ranking: 0 };
+    return { success: false, ranking: 0, isFirstTimeToday: false };
   }
 }
 
@@ -320,15 +321,17 @@ export async function getTodayAllUsersRecord(): Promise<
 }
 
 /**
- * 格式化時間為上午/下午幾點
+ * 格式化時間為上午/下午幾點（台灣時區）
  */
-const getFormattedTime = (isoString: string): string => {
+export const getFormattedTime = (isoString: string): string => {
   try {
     const date = new Date(isoString);
-    const hours = date.getHours();
-    const period = hours < 12 ? "上午" : "下午";
-    const displayHours = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${period}${displayHours}點`;
+    const taiwanTime = date.toLocaleString("zh-TW", {
+      timeZone: "Asia/Taipei",
+      hour: "numeric",
+      hour12: true,
+    });
+    return taiwanTime.replace("時", "點");
   } catch (error) {
     console.error("❌ 時間格式化失敗:", error);
     return "時間未知";
@@ -384,7 +387,7 @@ export async function getUnfinishedUsers(): Promise<
 }
 
 /**
- * 批量推送提醒訊息給未完成運動的用戶 - 完整版本
+ * 批量推送提醒訊息給未完成運動的用戶
  */
 export async function sendRemindersToUnfinishedUsers(
   finishedUserDisplayName: string,
@@ -399,26 +402,27 @@ export async function sendRemindersToUnfinishedUsers(
       return { success: true, sentCount: 0 };
     }
 
-    let sentCount = 0;
-    const lineClient = new Client({
-      channelAccessToken: accessToken,
-      channelSecret: secret,
-    });
+    // let sentCount = 0;
+    const sentCount = 0;
+    // const lineClient = new Client({
+    //   channelAccessToken: accessToken,
+    //   channelSecret: secret,
+    // });
 
     // 批量發送提醒
-    for (const user of unfinishedUsers) {
-      try {
-        const reminderMessage = createReminderMessage(finishedUserDisplayName);
-        await lineClient.pushMessage(user.userId, reminderMessage);
-        sentCount++;
-        console.log(`✅ 提醒訊息已發送給 ${user.displayName} (${user.userId})`);
-      } catch (error) {
-        console.error(
-          `❌ 發送提醒訊息失敗給 ${user.displayName} (${user.userId}):`,
-          error
-        );
-      }
-    }
+    // for (const user of unfinishedUsers) {
+    //   try {
+    //     const reminderMessage = createReminderMessage(finishedUserDisplayName);
+    //     await lineClient.pushMessage(user.userId, reminderMessage);
+    //     sentCount++;
+    //     console.log(`✅ 提醒訊息已發送給 ${user.displayName} (${user.userId})`);
+    //   } catch (error) {
+    //     console.error(
+    //       `❌ 發送提醒訊息失敗給 ${user.displayName} (${user.userId}):`,
+    //       error
+    //     );
+    //   }
+    // }
 
     console.log(
       `✅ 提醒訊息發送完成，成功發送 ${sentCount}/${unfinishedUsers.length} 則訊息`

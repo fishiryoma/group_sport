@@ -163,27 +163,34 @@ async function handleExerciseComplete(
       console.log(`✅ 成功回覆用戶 ${userId} 運動完成訊息`);
     }
 
-    // 檢查是否需要發送提醒：只要不是最後一名，都要發通知給其他尚未完成的用戶
+    // 檢查是否需要發送提醒：只有當日第一次記錄時才發送提醒
     console.log(
       `✅ 用戶 ${userId} (${displayName}) 完成運動，排名第 ${recordResult.ranking} 名`
     );
 
-    // 異步發送提醒訊息，但先檢查是否還有其他未完成的用戶
-    sendRemindersToUnfinishedUsers(displayName, accessToken, secret)
-      .then((result) => {
-        if (result.sentCount > 0) {
-          console.log(
-            `✅ 提醒訊息發送結果: 成功發送 ${result.sentCount} 則訊息給尚未完成的用戶`
-          );
-        } else {
-          console.log(
-            `🎉 ${displayName} 是最後一名完成運動的用戶，所有人都已完成今日運動！`
-          );
-        }
-      })
-      .catch((error) => {
-        console.error("❌ 發送提醒訊息時發生錯誤:", error);
-      });
+    // 只有當日第一次記錄時才發送提醒給其他用戶
+    if (recordResult.isFirstTimeToday) {
+      console.log(`📢 ${displayName} 當日第一次記錄運動，發送提醒給其他用戶`);
+
+      // 異步發送提醒訊息，但先檢查是否還有其他未完成的用戶
+      sendRemindersToUnfinishedUsers(displayName, accessToken, secret)
+        .then((result) => {
+          if (result.sentCount > 0) {
+            console.log(
+              `✅ 提醒訊息發送結果: 成功發送 ${result.sentCount} 則訊息給尚未完成的用戶`
+            );
+          } else {
+            console.log(
+              `🎉 ${displayName} 是最後一名完成運動的用戶，所有人都已完成今日運動！`
+            );
+          }
+        })
+        .catch((error) => {
+          console.error("❌ 發送提醒訊息時發生錯誤:", error);
+        });
+    } else {
+      console.log(`ℹ️ ${displayName} 重複輸入「完成」，不發送提醒訊息`);
+    }
 
     return {
       success: true,

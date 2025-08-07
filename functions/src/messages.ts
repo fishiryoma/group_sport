@@ -8,7 +8,7 @@ export function createGeneralMessage(displayName?: string): Message {
     type: "text",
     text: `🎉 ${
       displayName || ""
-    }你好！！\n\n大家一起來運動⛷️\n\n每天回報你的運動情況吧👟\n\n請輸入「完成」來記錄今日運動💪\n請輸入「排名」來看看今天大家運動了沒😏`,
+    }你好！！\n\n大家一起來運動⛷️\n\n每天回報你的運動情況吧👟\n\n請輸入「完成」來記錄今日運動💪\n請輸入「排名」來看看今天大家運動了沒😏\n\n`,
   };
 }
 
@@ -34,7 +34,7 @@ export function createRecordReply(
 export function createReminderMessage(displayName: string): Message {
   return {
     type: "text",
-    text: `${displayName}已經運動完囉😏\n你今天什麼時候才要運動？🥺`,
+    text: `${displayName}已經運動完囉！！\n你今天什麼時候才要運動🥺`,
   };
 }
 
@@ -65,7 +65,15 @@ export function createRankingReply(
 
   if (finishedUsers.length > 0) {
     finishedUsers.forEach((user) => {
-      messageText += `🔺${user.displayName}: 第${user.ranking}名 (${user.finishTime}完成)\n`;
+      let icon = "🔺";
+      if (user.ranking && user.ranking === 1) {
+        icon = "🥇";
+      } else if (user.ranking && user.ranking === 2) {
+        icon = "🥈";
+      } else if (user.ranking && user.ranking === 3) {
+        icon = "🥉";
+      }
+      messageText += `${icon}${user.displayName}: 第${user.ranking}名 (${user.finishTime}完成)\n`;
     });
   }
 
