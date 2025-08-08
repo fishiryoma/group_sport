@@ -3,22 +3,31 @@ import { Message, Client } from "@line/bot-sdk";
 import { db } from "./config";
 import { createReminderMessage } from "./messages";
 
-const getTodayDate = (): string => {
-  const date = new Date();
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+// 格式化日期為台灣時區
+const formatDateToTaiwan = (date: Date): string => {
+  const formatter = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+
   return `${year}-${month}-${day}`;
 };
 
+const getTodayDate = (): string => {
+  return formatDateToTaiwan(new Date());
+};
+
 const getYesterdayDate = (): string => {
-  const today = new Date();
   const yesterday = new Date();
-  yesterday.setDate(today.getDate() - 1);
-  const year = yesterday.getFullYear();
-  const month = String(yesterday.getMonth() + 1).padStart(2, "0");
-  const day = String(yesterday.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  yesterday.setDate(yesterday.getDate() - 1);
+  return formatDateToTaiwan(yesterday);
 };
 
 /**
@@ -205,7 +214,7 @@ const calculateCurrentRanking = async (): Promise<number> => {
 };
 
 /**
- * 寫入今日運動紀錄 - 完整版本
+ * 寫入今日運動紀錄
  */
 export async function writeRecord(
   userId: string
