@@ -53,7 +53,7 @@ export const lineWebhook = onRequest(
 
       const requestBody =
         typeof req.body === "string" ? req.body : JSON.stringify(req.body);
-      console.log("Req.bod是什麼呢??", req.body);
+      console.log(req.body);
 
       // 簽名驗證
       if (!validateSignature(requestBody, secretValue, signature)) {
